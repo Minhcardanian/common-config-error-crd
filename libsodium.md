@@ -1,72 +1,52 @@
-# Diagnosing and Fixing `crypto_vrf_ietfdraft13_*` Linking Errors in `cardano-node`
+# Debug Notes: Building `libsodium` with VRF support for Cardano
 
-## ❗ Problem Summary
+## ✅ Summary
 
-When building `cardano-node` 10.3.1, you may encounter linker errors such as:
-
-```
-undefined reference to `crypto_vrf_ietfdraft13_publickeybytes`
-undefined reference to `crypto_vrf_ietfdraft13_secretkeybytes`
-```
-
-These errors indicate that the installed `libsodium` **does not support the VRF ietfdraft13 extension functions**, which are **required** for recent `cardano-node` builds (especially those involving `cardano-crypto-praos`).
+This document outlines the steps taken to properly build `libsodium` with VRF (Verifiable Random Function) support required by `cardano-crypto-praos` during Cardano node compilation (e.g., version 10.3.1 with GHC 9.6.7). It also records common issues and their fixes.
 
 ---
 
-## 🧪 Diagnosis Steps
+## ⚠️ Problem
 
-1. Check the current system `libsodium`:
+### Error During Linking
 
-```bash
-nm -D /usr/local/lib/libsodium.so | grep crypto_vrf_ietfdraft13
+```
+(.text+0x97ba): undefined reference to `crypto_vrf_ietfdraft13_publickeybytes'
+...
+undefined reference to `crypto_vrf_ietfdraft13_secretkeybytes'
 ```
 
-If **no output appears**, then the current library lacks support for VRF ietfdraft13 functions.
+This means the currently installed `libsodium` does **not contain the required VRF symbols**.
 
-2. You may also try:
+### Cause
 
-```bash
-strings /usr/local/lib/libsodium.so | grep ietfdraft13
-```
-
-Again, if this returns nothing, your build is missing VRF extensions.
+The default `libsodium` or the version from `input-output-hk/libsodium` does **not** include VRF support. VRF functionality (e.g., `crypto_vrf_ietfdraft13_*`) is only available in custom forks used by Intersect or Input Output.
 
 ---
 
-## ✅ Correct Source: IntersectMBO's `libsodium` Fork
+## 🧱️ Solution: Use the Correct Source
 
-The required functions are **not available** in the default IOG or upstream `libsodium`. Instead, use:
+### ✅ Correct Repository
+
+Use the VRF-enabled fork from Intersect:
 
 ```
 https://github.com/IntersectMBO/libsodium
 ```
 
-### Recommended Commit:
+We recommend checking out a specific working branch:
 
-```
-dbb48ccf89bd3b6a292b16276fd9cfd6dd6675b2
+```bash
+git clone https://github.com/IntersectMBO/libsodium
+cd libsodium
+git checkout iquerejeta/vrf_batchverify
 ```
 
 ---
 
-## 🔧 Installation Instructions
+## 🧱 Build Instructions (WSL / Linux)
 
 ```bash
-# Clean existing versions
-sudo rm -rf /usr/local/lib/libsodium* /usr/local/include/sodium
-
-# Clone the correct repo
-cd ~/libdeps
-git clone https://github.com/IntersectMBO/libsodium
-cd libsodium
-git checkout dbb48cc
-
-# Replace broken/missing config files
-curl -o build-aux/config.guess https://git.savannah.gnu.org/gitweb/?p=config.git\;a=blob_plain\;f=config.guess\;hb=HEAD
-curl -o build-aux/config.sub https://git.savannah.gnu.org/gitweb/?p=config.git\;a=blob_plain\;f=config.sub\;hb=HEAD
-chmod +x build-aux/config.*
-
-# Build
 ./autogen.sh
 ./configure --prefix=/usr/local
 make -j$(nproc)
@@ -76,47 +56,60 @@ sudo ldconfig
 
 ---
 
-## 🔁 Verify Installation
+## ✅ Verification
+
+After installation, confirm VRF functions exist:
 
 ```bash
-nm -D /usr/local/lib/libsodium.so | grep crypto_vrf_ietfdraft13
+nm -D /usr/local/lib/libsodium.so | grep ietfdraft13
 ```
 
-You should now see multiple symbols like:
+You should see lines like:
 
 ```
-crypto_vrf_ietfdraft13_prove
-crypto_vrf_ietfdraft13_verify
-crypto_vrf_ietfdraft13_publickeybytes
+crypto_vrf_ietfdraft13_batch_verify
+crypto_vrf_ietfdraft13_secretkeybytes
+...
 ```
 
 ---
 
-## ✅ Final Check
+## 🌐 Note on Savannah Download Failures
 
-Rebuild `cardano-node`:
+During this process, `autoreconf` or `autogen.sh` may attempt to download updated versions of `config.guess` and `config.sub` from:
 
-```bash
-cd ~/cardano-src/cardano-node
-cabal build cardano-node
+```
+https://git.savannah.gnu.org/cgit/config.git/plain/config.sub
 ```
 
-Then check:
+### ❌ Problem:
+
+As of 2025-05-19, this site returned a **502 Bad Gateway** response intermittently or continuously.
+
+### ✅ Workaround:
+
+Use the GitHub mirror instead:
+
+```bash
+curl -o build-aux/config.guess https://git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.guess;hb=HEAD
+curl -o build-aux/config.sub https://git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.sub;hb=HEAD
+chmod +x build-aux/config.*
+```
+
+Or use a system copy if available:
+
+```bash
+cp /usr/share/misc/config.guess build-aux/
+cp /usr/share/misc/config.sub build-aux/
+```
+
+---
+
+## ✅ Final Outcome
+
+After using the correct fork and fixing `config.sub/config.guess`, the Cardano node compiled successfully with full VRF support:
 
 ```bash
 cardano-node --version
+# cardano-node 10.3.1 - linux-x86_64 - ghc-9.6
 ```
-
-Should return:
-
-```
-cardano-node 10.3.1 - linux-x86_64 - ghc-9.6
-```
-
----
-
-## 🔚 Conclusion
-
-This fix is **crucial** for anyone building the latest `cardano-node` and encountering undefined VRF symbols. Using the **IntersectMBO fork of libsodium** with the right commit ensures compatibility.
-
-> This note was built during a real-world debugging session in May 2025. Please check Intersect/Cardano repos for updates if builds change.
