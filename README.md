@@ -61,6 +61,23 @@
 Nếu bạn gặp lỗi mới hoặc có giải pháp hiệu quả, hãy tạo PR hoặc issue tại [https://github.com/Minhcardanian/common-config-error-crd](https://github.com/Minhcardanian/common-config-error-crd). Mọi đóng góp đều giúp hệ sinh thái Cardano phát triển vững mạnh hơn!
 
 ---
+## 🧨 6. Lỗi đặc thù và tốn thời gian debug (Advanced Errors)
+
+Các lỗi dưới đây tuy ít gặp hơn nhưng thường gây "tắc nghẽn" trong quá trình phát triển node hoặc smart contract do khó truy vết nguyên nhân gốc. Đây là những lỗi đã từng khiến nhiều lập trình viên mất hàng giờ (thậm chí cả ngày) để xử lý nếu không biết trước cách khắc phục.
+
+| ❗ Lỗi | 🔍 Nguyên nhân gốc | ✅ Cách khắc phục | ⏱️ Ước tính thời gian nếu không biết |
+|------|-------------------|-------------------|--------------------------|
+| `libsodium.so.23: cannot open shared object file` | Thiếu thư viện `libsodium` hoặc build sai | Cài `libsodium-dev`, đảm bảo `LD_LIBRARY_PATH=/usr/local/lib` | 2–5 tiếng |
+| `cardano-node: symbol lookup error: undefined symbol` | Xung đột giữa object file với lib hệ thống (`libgmp`, `libsystemd`, ...) | Rebuild toàn bộ từ `cabal clean` và kiểm tra bằng `ldd` | 3–6 tiếng |
+| `KES key expired` nhưng `kes-period-info` vẫn đúng | File `kes.counter` không đồng bộ với `kes.vkey` hoặc bị reset | Kiểm tra kỹ epoch và counter, không dùng lại file từ git pull | 2–8 tiếng |
+| `Permission denied` khi chạy node dưới `systemd` | User không có quyền truy cập thư mục `db`, `.cabal`, hoặc `.ghcup` | Chuyển thư mục sang `/opt/`, cấp quyền chính xác cho user | 1–4 tiếng |
+| `Could not decode byron genesis file` | File JSON sai newline hoặc không chuẩn định dạng | Dùng `file` kiểm tra encoding (`unix`) và format chuẩn | 1–3 tiếng |
+| `JSON parse error: invalid numeric literal` | Trong `config.json`, các số phải ở dạng chuỗi `"0"` chứ không phải `0` | Chuyển đổi đúng với YAML → JSON | 2 tiếng |
+| Node chạy được nhưng `cardano-cli` báo lỗi: `Invalid block version` | Dùng `cardano-cli` không khớp version với `cardano-node` | Đồng bộ `cardano-cli` build với cùng commit | 2–6 tiếng |
+| `Couldn't parse ProtocolVersion` | `mainnet-shelley-genesis.json` bị sửa tay không đúng kiểu dữ liệu | Dùng file gốc từ IOHK hoặc sửa bằng `jq` | 1–3 tiếng |
+| `cabal install` xong nhưng không có binary | Chạy với `--lib` hoặc thiếu PATH | Dùng `--install-method=copy`, kiểm tra `$PATH` có `~/.cabal/bin` | 1–2 tiếng |
+| `Build failed` sau khi `git pull` | Các file `dist-newstyle` hoặc `.cabal/store` giữ lại artifact cũ | Xoá sạch bằng `git clean -xfd && cabal clean` | 2–5 tiếng |
+---
 
 *Maintained by [@Minhcardanian](https://github.com/Minhcardanian)*  
 *Last updated: 2025-05*
